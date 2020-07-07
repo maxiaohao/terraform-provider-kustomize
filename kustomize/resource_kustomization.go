@@ -125,7 +125,8 @@ func kustomizationResourceCreate(d *schema.ResourceData, m interface{}) error {
 	id := string(resp.GetUID())
 	d.SetId(id)
 
-	d.Set("manifest", getLastAppliedConfig(resp))
+	//d.Set("manifest", getLastAppliedConfig(resp))
+	d.Set("manifest", getSimplified(resp, []byte(srcJSON)))
 
 	return kustomizationResourceRead(d, m)
 }
@@ -134,7 +135,8 @@ func kustomizationResourceRead(d *schema.ResourceData, m interface{}) error {
 	client := m.(*Config).Client
 	clientset := m.(*Config).Clientset
 
-	u, err := parseJSON(d.Get("manifest").(string))
+	srcJSON := d.Get("manifest").(string)
+	u, err := parseJSON(srcJSON)
 	if err != nil {
 		return fmt.Errorf("ResourceRead: %s", err)
 	}
@@ -157,7 +159,8 @@ func kustomizationResourceRead(d *schema.ResourceData, m interface{}) error {
 	id := string(resp.GetUID())
 	d.SetId(id)
 
-	d.Set("manifest", getLastAppliedConfig(resp))
+	//d.Set("manifest", getLastAppliedConfig(resp))
+	d.Set("manifest", getSimplified(resp, []byte(srcJSON)))
 
 	return nil
 }
@@ -167,23 +170,23 @@ func kustomizationResourceDiff(d *schema.ResourceDiff, m interface{}) error {
 	clientset := m.(*Config).Clientset
 
 	originalJSON, modifiedJSON := d.GetChange("manifest")
-
-	if !d.HasChange("manifest") {
-		return nil
-	}
-
-	if originalJSON.(string) == "" {
-		return nil
+	//if originalJSON != "" {
+	//	return fmt.Errorf("originalJSON: %s, modifiedJSON: %s", originalJSON, modifiedJSON)
+	//}
+	if originalJSON != "" {
+		//return fmt.Errorf("whole d: %s", d)
 	}
 
 	u, err := parseJSON(originalJSON.(string))
 	if err != nil {
-		return fmt.Errorf("ResourceDiff: %s", err)
+		//return nil
+		////return errors.Unwrap(err)
+		return fmt.Errorf("ResourceDiff1: %s", err)
 	}
 
 	gvr, err := getGVR(u.GroupVersionKind(), clientset)
 	if err != nil {
-		return fmt.Errorf("ResourceDiff: %s", err)
+		return fmt.Errorf("ResourceDiff2: %s", err)
 	}
 	namespace := u.GetNamespace()
 	name := u.GetName()
@@ -194,20 +197,28 @@ func kustomizationResourceDiff(d *schema.ResourceDiff, m interface{}) error {
 		true,
 		m)
 	if err != nil {
-		return fmt.Errorf("ResourceDiff: %s", err)
+		return fmt.Errorf("ResourceDiff3: %s", err)
 	}
+
+	//if !d.HasChange("manifest") originalJSON {
+	//	return nil
+	//}
 
 	patch, err := getPatch(original, modified, current)
 	if err != nil {
 		return fmt.Errorf("ResourceDiff: %s", err)
 	}
 
+	//if patch != nil {
+	//	return fmt.Errorf("o: %s, \nm: %s, \n c: %s\n p: %s", originalJSON, modifiedJSON, string(current), string(patch))
+	//}
+
 	dryRunPatch := k8smetav1.PatchOptions{DryRun: []string{k8smetav1.DryRunAll}}
 
 	_, err = client.
 		Resource(gvr).
 		Namespace(namespace).
-		Patch(context.TODO(), name, k8stypes.MergePatchType, patch, dryRunPatch)
+		Patch(context.TODO(), name, k8stypes.StrategicMergePatchType, patch, dryRunPatch)
 	if err != nil {
 		//
 		//
@@ -306,7 +317,7 @@ func kustomizationResourceUpdate(d *schema.ResourceData, m interface{}) error {
 	patchResp, err := client.
 		Resource(gvr).
 		Namespace(namespace).
-		Patch(context.TODO(), name, k8stypes.MergePatchType, patch, k8smetav1.PatchOptions{})
+		Patch(context.TODO(), name, k8stypes.StrategicMergePatchType, patch, k8smetav1.PatchOptions{})
 	if err != nil {
 		return fmt.Errorf("ResourceUpdate: patching '%s' failed: %s", gvr, err)
 	}
@@ -314,7 +325,8 @@ func kustomizationResourceUpdate(d *schema.ResourceData, m interface{}) error {
 	id := string(patchResp.GetUID())
 	d.SetId(id)
 
-	d.Set("manifest", getLastAppliedConfig(patchResp))
+	//d.Set("manifest", getLastAppliedConfig(patchResp))
+	d.Set("manifest", getSimplified(patchResp, modified))
 
 	return kustomizationResourceRead(d, m)
 }
@@ -409,6 +421,7 @@ func kustomizationResourceImport(d *schema.ResourceData, m interface{}) ([]*sche
 	d.SetId(id)
 
 	d.Set("manifest", getLastAppliedConfig(resp))
+	//d.Set("manifest", getSimplified(resp, []byte(srcJSON)))
 
 	return []*schema.ResourceData{d}, nil
 }

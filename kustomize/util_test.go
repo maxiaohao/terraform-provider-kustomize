@@ -40,3 +40,19 @@ func TestGetPatch(t *testing.T) {
 		t.Errorf("TestGetPatch: %s", err)
 	}
 }
+
+func TestSimplifyCurrent(t *testing.T) {
+	fullCurrent := []byte("{\"apiVersion\": \"v1\", \"kind\": \"Namespace\", \"metadata\": {\"name\": \"test-unit-old\", \"namespace\": \"test-unit\", \"foo\": \"bar\"}}")
+	targeted := []byte("{\"apiVersion\": \"v1\", \"kind\": \"Namespace\", \"metadata\": {\"name\": \"test-unit-new\", \"baz\": \"qux\"}}")
+
+	result, err := simplifyCurrent(fullCurrent, targeted)
+	t.Logf("result: %s", result)
+	if err != nil {
+		t.Errorf("TestSimplifyCurrent: %s", err)
+	}
+
+	expected := "{\"apiVersion\":\"v1\",\"kind\":\"Namespace\",\"metadata\":{\"name\":\"test-unit-old\"}}"
+	if expected != string(result) {
+		t.Errorf("expected: %s, got: %s", expected, result)
+	}
+}

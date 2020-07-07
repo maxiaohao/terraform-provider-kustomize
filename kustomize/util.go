@@ -3,6 +3,7 @@ package kustomize
 import (
 	"context"
 	"fmt"
+	jsonpatch "github.com/evanphx/json-patch"
 
 	k8scorev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -20,16 +21,24 @@ import (
 const lastAppliedConfig = k8scorev1.LastAppliedConfigAnnotation
 
 func setLastAppliedConfig(u *k8sunstructured.Unstructured, srcJSON string) {
-	annotations := u.GetAnnotations()
-	if len(annotations) == 0 {
-		annotations = make(map[string]string)
-	}
-	annotations[lastAppliedConfig] = srcJSON
-	u.SetAnnotations(annotations)
+	//annotations := u.GetAnnotations()
+	//if len(annotations) == 0 {
+	//	annotations = make(map[string]string)
+	//}
+	//annotations[lastAppliedConfig] = srcJSON
+	//u.SetAnnotations(annotations)
 }
 
 func getLastAppliedConfig(u *k8sunstructured.Unstructured) string {
-	return u.GetAnnotations()[lastAppliedConfig]
+	//return u.GetAnnotations()[lastAppliedConfig]
+	bytes, _ := u.MarshalJSON()
+	return string(bytes)
+}
+
+func getSimplified(resp *k8sunstructured.Unstructured, targeted []byte) string {
+	bytes, _ := resp.MarshalJSON()
+	simplified, _ := simplifyCurrent(bytes, targeted)
+	return string(simplified)
 }
 
 func getOriginalModifiedCurrent(originalJSON string, modifiedJSON string, currentAllowNotFound bool, m interface{}) (original []byte, modified []byte, current []byte, err error) {
@@ -127,4 +136,25 @@ func parseJSON(json string) (ur *k8sunstructured.Unstructured, err error) {
 	ur = u.(*k8sunstructured.Unstructured)
 
 	return ur, nil
+}
+
+func simplifyCurrent(fullCurrent, modified []byte) (simplifiedCurrent []byte, err error) {
+	var preconditions []mergepatch.PreconditionFunc
+
+	patch1, err := jsonmergepatch.CreateThreeWayJSONMergePatch(modified, fullCurrent, fullCurrent, preconditions...)
+	if err != nil {
+		return nil, err
+	}
+
+	patched, err := jsonpatch.MergePatch(fullCurrent, patch1)
+	if err != nil {
+		return nil, err
+	}
+
+	patch2, _ := jsonmergepatch.CreateThreeWayJSONMergePatch(fullCurrent, modified, modified, preconditions...)
+	if err != nil {
+		return nil, err
+	}
+
+	return jsonpatch.MergePatch(patched, patch2)
 }
